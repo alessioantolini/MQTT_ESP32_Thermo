@@ -17,6 +17,7 @@
 
 #include <Arduino.h>
 #include <oled.h>
+#include <DHT.h>
 
 /*
  * config.h contains configuration variable specific for you installation
@@ -35,6 +36,8 @@
  */
 #include "config.h"
 
+
+// OLED
 OLED display=OLED(4,5,16);
 
 // Enable MqttClient logs
@@ -57,9 +60,20 @@ void logfln(const char *fmt, ...) {
 #define HW_UART_SPEED									115200L
 
 
+// MQTT CLIENT
 static MqttClient *mqtt = NULL;
 static WiFiClient network;
 
+// SENSOR CONFIGURATION
+// Uncomment one of the lines below for whatever DHT sensor type you're using!
+//#define DHTTYPE DHT11 // DHT 11
+//#define DHTTYPE DHT21 // DHT 21 (AM2301)
+#define DHTTYPE DHT22 // DHT 22 (AM2302), AM2321
+//DHT Sensor;
+uint8_t DHTPin = 2; 
+DHT dht(DHTPin, DHTTYPE); 
+float Temperature;
+float Humidity;
 
 
 
@@ -105,6 +119,10 @@ void setup() {
   display.begin();
   display.draw_string(4,2,"Starting...");
   display.display();
+
+  // Setup SENSOR
+  pinMode(DHTPin, INPUT);
+  dht.begin();
 
 	// Setup WiFi network
 	WiFi.mode(WIFI_STA);
@@ -197,16 +215,37 @@ void loop() {
 		}
 	} else {
 		{
-			// Add publish here if required
-     const char* buf = "Cicciobbello";
+			// Read data from sensor
+      Temperature = dht.readTemperature(); 
+      Humidity = dht.readHumidity();
+
+      // Prepare printout
+      char temp[8], hum[8], TemperatureString[16], HumidityString[16], status_msg[8];
+      dtostrf(Temperature, 6, 2, temp);
+      dtostrf(Humidity, 6, 2, hum);
+      sprintf(TemperatureString, "%s°C", temp);
+      sprintf(HumidityString, "%s %", hum);
+      sprintf(status_msg, "OK");
+
+      // Display
+      display.clear();
+      display.draw_string(0,1,TemperatureString,OLED::DOUBLE_SIZE);
+      display.draw_string(0,18,HumidityString,OLED::DOUBLE_SIZE);
+      display.display();
+      
       MqttClient::Message message;
       message.qos = MqttClient::QOS0;
       message.retained = false;
       message.dup = false;
-      message.payload = (void*) buf;
-      message.payloadLen = strlen(buf);
-      mqtt->publish(MQTT_DATA_PUB, message);
-    
+      message.payload = temp;
+      message.payloadLen = strlen(temp);
+      mqtt->publish(MQTT_DATA_PUB_T, message);
+      message.payload = hum;
+      message.payloadLen = strlen(hum);
+      mqtt->publish(MQTT_DATA_PUB_H, message);
+      message.payload = status_msg;
+      message.payloadLen = strlen(status_msg);
+      mqtt->publish(MQTT_COMMAND_PUB, message);     
 		}
 		// Idle for 30 seconds
 		mqtt->yield(30000L);
