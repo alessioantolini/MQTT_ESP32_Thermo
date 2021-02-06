@@ -1,15 +1,15 @@
 /*
  *******************************************************************************
- *
- * Purpose: Example of using the Arduino MqttClient with Esp8266WiFiClient.
- * Project URL: https://github.com/monstrenyatko/ArduinoMqtt
+ *  ESP32 MQTT Thermometer and Hygrometer
+ *  Copyright Alessio Antolini 2021
+ *  Distributed under GNU v3 License
  *
  *******************************************************************************
- * Copyright Oleg Kovalenko 2017.
- *
+ * This project use the MQTT Library developed by Oleg Kovalenk
  * Distributed under the MIT License.
- * (See accompanying file LICENSE or copy at http://opensource.org/licenses/MIT)
+ * Project URL: https://github.com/monstrenyatko/ArduinoMqtt
  *******************************************************************************
+ *
  */
 
 #include <Arduino.h>
@@ -17,6 +17,23 @@
 
 #include <Arduino.h>
 #include <oled.h>
+
+/*
+ * config.h contains configuration variable specific for you installation
+ * 
+ * #define MQTT_ID  "yourname"
+ * #define WIFI_SID "yoursid"
+ * #define WIFI_PWD "pwd"
+ * #define MQTT_SERVER   "x.x.x.x"
+ * #define MQTT_PORT     1883
+ * #define MQTT_USER     "user"
+ * #define MQTT_PWD      "pwd"    
+ * const char* MQTT_COMMAND_SUB = "<yourconf>";
+ * const char* MQTT_COMMAND_PUB = "antolini/" MQTT_ID "/cmd/status";
+ * const char* MQTT_DATA_PUB = "antolini/" MQTT_ID "/data";
+ * 
+ */
+#include "config.h"
 
 OLED display=OLED(4,5,16);
 
@@ -38,10 +55,7 @@ void logfln(const char *fmt, ...) {
 }
 
 #define HW_UART_SPEED									115200L
-#define MQTT_ID											"MultiSensor01"
-const char* MQTT_COMMAND_SUB = "antolini/" MQTT_ID "/cmd/get";
-const char* MQTT_COMMAND_PUB = "antolini/" MQTT_ID "/cmd/status";
-const char* MQTT_DATA_PUB = "antolini/" MQTT_ID "/data";
+
 
 static MqttClient *mqtt = NULL;
 static WiFiClient network;
@@ -95,7 +109,7 @@ void setup() {
 	// Setup WiFi network
 	WiFi.mode(WIFI_STA);
 	WiFi.hostname("ESP_" MQTT_ID);
-	WiFi.begin("antolini", "0622754525");
+	WiFi.begin(WIFI_SID, WIFI_PWD);
 	LOG_PRINTFLN("\n");
 	LOG_PRINTFLN("Connecting to WiFi");
 	while (WiFi.status() != WL_CONNECTED) {
@@ -104,6 +118,9 @@ void setup() {
 	}
 	LOG_PRINTFLN("Connected to WiFi");
 	LOG_PRINTFLN("IP: %s", WiFi.localIP().toString().c_str());
+  display.clear();
+  display.draw_string(4,2,"WIFI Connected...");
+  display.display();
 
 	// Setup MqttClient
 	MqttClient::System *mqttSystem = new System;
@@ -134,7 +151,7 @@ void loop() {
 		network.stop();
 		// Re-establish TCP connection with MQTT broker
 		LOG_PRINTFLN("Connecting");
-		network.connect("10.0.1.10", 2883);
+		network.connect(MQTT_SERVER, MQTT_PORT);
 		if (!network.connected()) {
 			LOG_PRINTFLN("Can't establish the TCP connection");
 			delay(5000);
@@ -150,16 +167,19 @@ void loop() {
 			options.cleansession = true;
 			options.keepAliveInterval = 15; // 15 seconds
       MQTTString username = MQTTString_initializer;
-      username.cstring = "mqttuser";
+      username.cstring = MQTT_USER;
       options.username = username;
       MQTTString password = MQTTString_initializer;
-      password.cstring = "alan2.";
+      password.cstring = MQTT_PWD;
       options.password = password;
 			MqttClient::Error::type rc = mqtt->connect(options, connectResult);
 			if (rc != MqttClient::Error::SUCCESS) {
 				LOG_PRINTFLN("Connection error: %i", rc);
 				return;
 			}
+      display.clear();
+      display.draw_string(4,2,"MQTT Connected...");
+      display.display();
 		}
 		{
 			// Add subscribe here if required
